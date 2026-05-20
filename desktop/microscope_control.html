@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP32-P4 智能显微镜 - 远程控制</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0d1117; color: #c9d1d9; min-height: 100vh;
+  }
+  .app { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+  /* 连接栏 */
+  .connect-bar {
+    display: flex; gap: 12px; align-items: center; padding: 12px 16px;
+    background: #161b22; border-radius: 8px; margin-bottom: 16px;
+  }
+  .connect-bar input {
+    flex: 1; padding: 8px 12px; border: 1px solid #30363d; border-radius: 6px;
+    background: #0d1117; color: #c9d1d9; font-size: 14px;
+  }
+  .connect-bar input:focus { outline: none; border-color: #4caf50; }
+  .btn {
+    padding: 8px 20px; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 14px; font-weight: 500; transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-danger { background: #da3633; color: #fff; }
+  .btn-danger:hover { background: #f85149; }
+  .btn-default { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+  .btn-default:hover { background: #30363d; }
+
+  .status-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 6px; background: #f85149;
+  }
+  .status-dot.connected { background: #3fb950; }
+
+  /* 主面板 */
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel {
+    background: #161b22; border-radius: 8px; padding: 16px;
+    border: 1px solid #21262d;
+  }
+  .panel.full { grid-column: 1 / -1; }
+  .panel h2 {
+    font-size: 15px; font-weight: 600; margin-bottom: 12px;
+    color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+
+  /* 位置显示 */
+  .pos-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .pos-item { text-align: center; }
+  .pos-item .axis { font-size: 12px; color: #8b949e; }
+  .pos-item .val { font-size: 24px; font-weight: 700; color: #4caf50; font-variant-numeric: tabular-nums; }
+
+  /* 方向键 */
+  .dpad {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+    width: 180px; margin: 12px auto;
+  }
+  .dpad-btn {
+    width: 56px; height: 56px; border: 1px solid #30363d; border-radius: 8px;
+    background: #21262d; color: #c9d1d9; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    user-select: none; -webkit-user-select: none;
+  }
+  .dpad-btn:active { background: #4caf50; }
+  .dpad-btn.empty { visibility: hidden; }
+  .dpad-btn.center { font-size: 12px; color: #8b949e; }
+
+  /* Z 轴 */
+  .z-btns { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+  .z-btn {
+    padding: 10px 24px; border: 1px solid #30363d; border-radius: 6px;
+    background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 14px;
+  }
+  .z-btn:active { background: #4caf50; }
+
+  /* 滑块 */
+  .slider-group { margin-bottom: 10px; }
+  .slider-group label { display: block; font-size: 13px; color: #8b949e; margin-bottom: 4px; }
+  .slider-group input[type=range] { width: 100%; }
+  .slider-group .val { float: right; color: #4caf50; }
+
+  /* 预设点 */
+  .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .preset-btn {
+    padding: 10px; border: 1px solid #30363d; border-radius: 6px;
+    background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 13px;
+    text-align: center;
+  }
+  .preset-btn:hover { border-color: #4caf50; }
+  .preset-btn.saved { background: #1b3a24; border-color: #238636; }
+
+  /* 速度选择 */
+  .speed-group { display: flex; gap: 8px; margin: 10px 0; }
+  .speed-btn {
+    flex: 1; padding: 8px; border: 1px solid #30363d; border-radius: 6px;
+    background: #21262d; color: #c9d1d9; cursor: pointer; font-size: 13px;
+    text-align: center;
+  }
+  .speed-btn.active { background: #1b3a24; border-color: #4caf50; color: #4caf50; }
+
+  /* 日志 */
+  .log {
+    max-height: 200px; overflow-y: auto; font-family: "SF Mono", monospace;
+    font-size: 12px; color: #8b949e; background: #0d1117; border-radius: 6px;
+    padding: 10px; margin-top: 8px;
+  }
+  .log .info { color: #8b949e; }
+  .log .ok { color: #3fb950; }
+  .log .err { color: #f85149; }
+
+  /* 键盘提示 */
+  .kbd {
+    display: inline-block; padding: 2px 6px; font-size: 11px;
+    background: #21262d; border: 1px solid #30363d; border-radius: 4px;
+    font-family: "SF Mono", monospace;
+  }
+
+  @media (max-width: 700px) {
+    .panels { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 连接栏 -->
+  <div class="connect-bar">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText" style="font-size:14px;">未连接</span>
+    <input type="text" id="hostInput" value="192.168.4.1" placeholder="显微镜 IP 地址">
+    <button class="btn btn-primary" onclick="connect()">连接</button>
+    <button class="btn btn-danger" onclick="disconnect()" style="display:none" id="disconnectBtn">断开</button>
+    <span style="font-size:12px;color:#8b949e;margin-left:auto;">
+      键盘: <span class="kbd">W</span><span class="kbd">A</span><span class="kbd">S</span><span class="kbd">D</span> 平面 <span class="kbd">Q</span><span class="kbd">E</span> 对焦
+    </span>
+  </div>
+
+  <!-- 主面板 -->
+  <div class="panels">
+    <!-- 位置 + 方向键 -->
+    <div class="panel">
+      <h2>位置 (μm)</h2>
+      <div class="pos-grid">
+        <div class="pos-item"><div class="axis">X</div><div class="val" id="posX">—</div></div>
+        <div class="pos-item"><div class="axis">Y</div><div class="val" id="posY">—</div></div>
+        <div class="pos-item"><div class="axis">Z</div><div class="val" id="posZ">—</div></div>
+      </div>
+      <div class="dpad">
+        <div class="dpad-btn empty"></div>
+        <div class="dpad-btn" onpointerdown="jog('y',500)">▲</div>
+        <div class="dpad-btn empty"></div>
+        <div class="dpad-btn" onpointerdown="jog('x',-500)">◄</div>
+        <div class="dpad-btn center" id="stepLabel">100μm</div>
+        <div class="dpad-btn" onpointerdown="jog('x',500)">►</div>
+        <div class="dpad-btn empty"></div>
+        <div class="dpad-btn" onpointerdown="jog('y',-500)">▼</div>
+        <div class="dpad-btn empty"></div>
+      </div>
+      <div class="z-btns">
+        <button class="z-btn" onpointerdown="jog('z',200)">Z ▲</button>
+        <button class="z-btn" onpointerdown="jog('z',-200)">Z ▼</button>
+      </div>
+
+      <div class="slider-group" style="margin-top:12px;">
+        <label>点动步长 <span class="val" id="stepVal">100 μm</span></label>
+        <input type="range" min="10" max="500" value="100" step="10" id="stepSlider"
+               oninput="updateStep(this.value)">
+      </div>
+
+      <div class="speed-group">
+        <button class="speed-btn active" id="speedSlow" onclick="setSpeed('慢')">慢</button>
+        <button class="speed-btn" id="speedMid" onclick="setSpeed('中')">中</button>
+        <button class="speed-btn" id="speedFast" onclick="setSpeed('快')">快</button>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-primary" onclick="apiHome()">回零</button>
+        <button class="btn btn-default" onclick="apiSavePreset()">保存位置</button>
+        <button class="btn btn-danger" onclick="apiStop()">停止</button>
+      </div>
+    </div>
+
+    <!-- 摄像头 + LED -->
+    <div class="panel">
+      <h2>摄像头 & 照明</h2>
+      <div class="slider-group">
+        <label>LED 亮度 <span class="val" id="ledVal">50%</span></label>
+        <input type="range" min="0" max="100" value="50" id="ledSlider"
+               oninput="setLED(this.value)">
+      </div>
+      <div style="display:flex;gap:6px;margin:6px 0 12px;">
+        <button class="btn btn-default" onclick="apiLED('preset','暗')">暗</button>
+        <button class="btn btn-default" onclick="apiLED('preset','中')">中</button>
+        <button class="btn btn-default" onclick="apiLED('preset','亮')">亮</button>
+        <button class="btn btn-default" onclick="apiLED('preset','最亮')">最亮</button>
+        <button class="btn btn-default" onclick="apiLED('on')">开灯</button>
+        <button class="btn btn-default" onclick="apiLED('off')">关灯</button>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="apiCameraCapture()">拍照</button>
+        <button class="btn btn-default" onclick="apiCameraPreview()">取景</button>
+      </div>
+      <div id="cameraStatus" style="font-size:12px;color:#8b949e;margin-top:8px;"></div>
+    </div>
+
+    <!-- 预设点 -->
+    <div class="panel full">
+      <h2>预设位置</h2>
+      <div class="preset-grid" id="presetGrid"></div>
+    </div>
+
+    <!-- 日志 -->
+    <div class="panel full">
+      <h2>事件日志</h2>
+      <div class="log" id="logBox">
+        <div class="info">等待连接显微镜 WiFi (默认 IP: 192.168.4.1)...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== 状态 ======
+let apiBase = '';
+let connected = false;
+let stepSize = 100;
+let pollTimer = null;
+
+// ====== 连接 ======
+async function connect() {
+  const host = document.getElementById('hostInput').value.trim() || '192.168.4.1';
+  apiBase = `http://${host}`;
+  try {
+    const resp = await fetch(`${apiBase}/api/status`, { signal: AbortSignal.timeout(3000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    connected = true;
+    updateConnectionUI(true);
+    updateStatus(data);
+    log('ok', `已连接到显微镜 @ ${host}`);
+    pollTimer = setInterval(poll, 500);
+    loadPresets();
+  } catch(e) {
+    log('err', `连接失败: ${e.message}`);
+    connected = false;
+    updateConnectionUI(false);
+  }
+}
+
+function disconnect() {
+  connected = false;
+  apiBase = '';
+  updateConnectionUI(false);
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  log('info', '已断开连接');
+}
+
+function updateConnectionUI(conn) {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  const btn = document.getElementById('disconnectBtn');
+  if (conn) {
+    dot.className = 'status-dot connected';
+    text.textContent = '已连接';
+    btn.style.display = '';
+  } else {
+    dot.className = 'status-dot';
+    text.textContent = '未连接';
+    btn.style.display = 'none';
+  }
+}
+
+// ====== 轮询 ======
+async function poll() {
+  if (!connected) return;
+  try {
+    const resp = await fetch(`${apiBase}/api/status`, { signal: AbortSignal.timeout(2000) });
+    if (resp.ok) updateStatus(await resp.json());
+  } catch(e) { /* 静默 */ }
+}
+
+function updateStatus(data) {
+  if (data.position) {
+    document.getElementById('posX').textContent = data.position.x.toFixed(0);
+    document.getElementById('posY').textContent = data.position.y.toFixed(0);
+    document.getElementById('posZ').textContent = data.position.z.toFixed(0);
+  }
+  if (data.led) {
+    document.getElementById('ledSlider').value = data.led.brightness;
+    document.getElementById('ledVal').textContent = data.led.brightness + '%';
+  }
+  if (data.state) {
+    document.getElementById('statusText').textContent = '状态: ' + data.state;
+  }
+}
+
+// ====== API 调用 ======
+async function apiCall(method, path, body) {
+  if (!connected) return log('err', '未连接');
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(5000) };
+    if (body) opts.body = JSON.stringify(body);
+    const resp = await fetch(`${apiBase}${path}`, opts);
+    const data = await resp.json();
+    if (!resp.ok) log('err', `${path}: ${data.error || resp.status}`);
+    else log('ok', path);
+    return data;
+  } catch(e) { log('err', `${path}: ${e.message}`); }
+}
+
+function jog(axis, um) {
+  const body = { rel: true };
+  body['d' + axis] = um * (stepSize / 100);
+  apiCall('POST', '/api/move', body);
+}
+
+async function apiHome() { await apiCall('POST', '/api/home'); }
+async function apiStop() { await apiCall('POST', '/api/move', { rel: true, dx:0, dy:0, dz:0 }); }
+
+async function setLED(type, val) {
+  const body = {};
+  if (type === 'preset') body.preset = val;
+  else if (type === 'on') body.on = true;
+  else if (type === 'off') body.on = false;
+  else body.brightness = parseInt(val);
+  await apiCall('POST', '/api/led', body);
+}
+document.getElementById('ledSlider').addEventListener('change', function() {
+  setLED('brightness', this.value);
+});
+
+async function apiSavePreset() {
+  await apiCall('POST', '/api/presets', {});
+  loadPresets();
+}
+async function loadPresets() {
+  if (!connected) return;
+  try {
+    const resp = await fetch(`${apiBase}/api/presets`, { signal: AbortSignal.timeout(3000) });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    renderPresets(data.presets || []);
+  } catch(e) {}
+}
+function renderPresets(presets) {
+  const grid = document.getElementById('presetGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const p = presets.find(x => x.slot === i);
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (p ? ' saved' : '');
+    btn.textContent = p ? `P${i+1}\nX:${p.position.x.toFixed(0)} Y:${p.position.y.toFixed(0)}` : `P${i+1} (空)`;
+    btn.onclick = () => { if (p) apiCall('POST', '/api/move', p.position); };
+    grid.appendChild(btn);
+  }
+}
+
+async function apiCameraCapture() {
+  const data = await apiCall('POST', '/api/camera/capture', {});
+  if (data && data.file) log('ok', `照片已保存: ${data.file}`);
+}
+async function apiCameraPreview() {
+  await apiCall('POST', '/api/camera/preview', { enable: true });
+}
+
+function setSpeed(speed) {
+  ['慢','中','快'].forEach(s => {
+    const el = document.getElementById('speed' + {慢:'Slow',中:'Mid',快:'Fast'}[s]);
+    if (s === speed) el.classList.add('active');
+    else el.classList.remove('active');
+  });
+}
+
+function updateStep(val) {
+  stepSize = parseInt(val);
+  document.getElementById('stepVal').textContent = val + ' μm';
+  document.getElementById('stepLabel').textContent = val + 'μm';
+}
+
+// ====== 日志 ======
+function log(type, msg) {
+  const box = document.getElementById('logBox');
+  const div = document.createElement('div');
+  div.className = type;
+  div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  while (box.children.length > 50) box.firstChild.remove();
+}
+
+// ====== 键盘控制 ======
+const keyMap = { w:['y',1], a:['x',-1], s:['y',-1], d:['x',1], q:['z',1], e:['z',-1], W:['y',1], A:['x',-1], S:['y',-1], D:['x',1], Q:['z',1], E:['z',-1] };
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const cmd = keyMap[e.key];
+  if (cmd) { e.preventDefault(); jog(cmd[0], cmd[1] > 0 ? 500 : -500); }
+});
+
+// ====== 初始 ======
+renderPresets([]);
+</script>
+</body>
+</html>

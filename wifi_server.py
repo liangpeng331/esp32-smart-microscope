@@ -93,16 +93,18 @@ class WifiServer:
     BUFFER_SIZE = 1024
     MAX_PRESETS = 6
 
-    def __init__(self, system_manager, stage, led):
+    def __init__(self, system_manager, stage, led, cam=None):
         """
         Args:
             system_manager: SystemManager 实例
             stage: StageController 实例
             led: LedController 实例
+            cam: CameraController 实例 (可选)
         """
         self._sys = system_manager
         self._stage = stage
         self._led = led
+        self._cam = cam
         self._sock = None
         self._running = False
 
@@ -115,6 +117,9 @@ class WifiServer:
             ("POST", "/api/led"): self._handle_set_led,
             ("GET", "/api/presets"): self._handle_get_presets,
             ("POST", "/api/presets"): self._handle_save_preset,
+            ("GET", "/api/camera"): self._handle_get_camera,
+            ("POST", "/api/camera/capture"): self._handle_camera_capture,
+            ("POST", "/api/camera/preview"): self._handle_camera_preview,
         }
 
     # ====== 服务器生命周期 ======
@@ -282,3 +287,36 @@ class WifiServer:
 
         self._sys.delete_preset(idx)
         return _build_response(200, {"deleted": idx})
+
+    # ====== 摄像头处理 ======
+
+    def _handle_get_camera(self, path, body):
+        if self._cam is None:
+            return _build_response(404, {"error": "摄像头未连接"})
+        return _build_response(200, self._cam.get_state())
+
+    def _handle_camera_capture(self, path, body):
+        if self._cam is None:
+            return _build_response(404, {"error": "摄像头未连接"})
+        import time
+        filename = f"/sd/photo_{int(time.time())}.jpg"
+        if self._cam.capture_to_file(filename):
+            return _build_response(201, {"file": filename})
+        return _build_response(500, {"error": "拍照失败"})
+
+    def _handle_camera_preview(self, path, body):
+        if self._cam is None:
+            return _build_response(404, {"error": "摄像头未连接"})
+        try:
+            data = json.loads(body) if body else {}
+        except ValueError:
+            return _build_response(400, {"error": "JSON 格式错误"})
+        enable = data.get("enable", False)
+        if enable:
+            ok = self._cam.start_preview()
+        else:
+            self._cam.stop_preview()
+            ok = True
+        if ok:
+            return _build_response(200, self._cam.get_state())
+        return _build_response(500, {"error": "预览操作失败"})
