@@ -125,6 +125,15 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                       : const Text('连接显微镜', style: TextStyle(fontSize: 16)),
                 ),
               ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: () => widget.onConnected?.call(MicroscopeApi('http://demo')),
+                  child: const Text('演示模式 (离线体验)', style: TextStyle(fontSize: 16)),
+                ),
+              ),
               const SizedBox(height: 16),
               Text(
                 '请先连接显微镜的 WiFi 热点\nMicroscope / 12345678',

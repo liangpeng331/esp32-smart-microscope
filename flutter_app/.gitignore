@@ -21,6 +21,7 @@ ios/.symlinks/
 # IDE
 .idea/
 .vscode/
+*.iml
 
 # OS
 .DS_Store
