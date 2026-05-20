@@ -154,4 +154,23 @@ cd esp32-smart-microscope
 python3 -m unittest discover -s tests -v
 ```
 
-所有 171 个测试在 CPython 上可以通过。
+所有 186 个测试在 CPython 上可以通过。
+
+## 硬件验证
+
+在 MicroPython REPL 中运行硬件测试脚本：
+
+```python
+import hardware_test
+hardware_test.run_all()
+```
+
+测试项目：
+1. GPIO 引脚可用性（6 个关键引脚）
+2. 3 轴步进电机（双向转动验证）
+3. LED PWM 调光（开关/亮度/预设）
+4. 摄像头采集（初始化/拍照/取景）
+5. WiFi AP 模式（SSID 广播）
+6. SD 卡读写（列出/写入/读取/删除）
+7. 触摸屏（lvgl 模块导入）
+8. I2S 麦克风（ESP-SR 初始化，可选）

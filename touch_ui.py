@@ -47,7 +47,7 @@ def _lv_font(size):
 class TouchUI:
     """显微镜主控界面。"""
 
-    def __init__(self, stage_controller, led_controller, system_manager=None, camera_controller=None, voice_controller=None):
+    def __init__(self, stage_controller, led_controller, system_manager=None, camera_controller=None, voice_controller=None, auto_exposure=None):
         """
         Args:
             stage_controller: StageController 实例
@@ -55,12 +55,14 @@ class TouchUI:
             system_manager: SystemManager 实例 (可选)
             camera_controller: CameraController 实例 (可选)
             voice_controller: VoiceController 实例 (可选)
+            auto_exposure: AutoExposure 实例 (可选)
         """
         self._stage = stage_controller
         self._led = led_controller
         self._sys = system_manager
         self._cam = camera_controller
         self._voice = voice_controller
+        self._ae = auto_exposure
 
         self._speed = "中"
         self._step_size = 100  # 点动步长 (μm)
@@ -163,6 +165,20 @@ class TouchUI:
             self._voice_status_lbl.set_text("语音就绪")
             self._voice_status_lbl.set_style_text_color(_lv_color(_HEX_SUBTLE), 0)
             self._voice_status_lbl.align(lv.ALIGN_TOP_LEFT, voice_x + 80, y + 5)
+
+        # 自动曝光开关（有摄像头时显示）
+        ae_x = 460
+        if self._cam is not None:
+            self._ae_btn = lv.button(self._scr)
+            self._ae_btn.set_size(60, 32)
+            self._ae_btn.align(lv.ALIGN_TOP_LEFT, ae_x, y)
+            self._ae_btn_lbl = lv.label(self._ae_btn)
+            self._ae_btn_lbl.set_text("AE")
+            self._ae_btn_lbl.center()
+            self._ae_btn.add_event_cb(
+                lambda e: self._toggle_ae(),
+                lv.EVENT.CLICKED, None
+            )
 
     def _build_position_panel(self):
         """位置显示 + XY 方向键。"""
@@ -482,6 +498,19 @@ class TouchUI:
                 self._voice_status_lbl.set_text("唤醒词: 小天小天")
             else:
                 self._show_toast("语音启动失败")
+
+    def _toggle_ae(self):
+        """开关自动曝光。"""
+        if self._ae is None:
+            self._show_toast("自动曝光不可用")
+            return
+        if self._ae.is_active():
+            self._ae.stop()
+            self._ae_btn_lbl.set_text("AE")
+        else:
+            self._ae.start()
+            self._ae_btn_lbl.set_text("AE✓")
+            self._show_toast("自动曝光已开启")
 
     def _on_about(self):
         self._show_alert("关于",
