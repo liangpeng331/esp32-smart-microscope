@@ -161,11 +161,11 @@ def _init_wifi():
         return None
 
 
-def _start_wifi_server(system_mgr, stage, led, cam=None):
+def _start_wifi_server(system_mgr, stage, led, cam=None, ae=None):
     """在后台线程启动 WiFi HTTP 服务器。"""
     from wifi_server import WifiServer
 
-    server = WifiServer(system_mgr, stage, led, cam)
+    server = WifiServer(system_mgr, stage, led, cam, ae)
     try:
         _thread.start_new_thread(server._serve, ())
         log(f"HTTP API 服务器已启动 (端口 {config.HTTP_PORT})")
@@ -176,13 +176,13 @@ def _start_wifi_server(system_mgr, stage, led, cam=None):
 
 # ====== 阶段4: UI 启动 ======
 
-def _init_ui(stage, led, sys_mgr, cam=None, voice=None):
+def _init_ui(stage, led, sys_mgr, cam=None, voice=None, ae=None):
     """创建并返回 TouchUI 实例。"""
     try:
         import lvgl as lv
         from touch_ui import TouchUI
 
-        ui = TouchUI(stage, led, sys_mgr, cam, voice)
+        ui = TouchUI(stage, led, sys_mgr, cam, voice, ae)
         log("触摸界面就绪")
         return ui
     except ImportError:
@@ -197,7 +197,7 @@ def _init_ui(stage, led, sys_mgr, cam=None, voice=None):
 
 def main():
     log("ESP32-P4 智能显微镜 启动中...")
-    log("版本 1.0.0 — 广东童园科技有限公司")
+    log("版本 1.2.0 — 广东童园科技有限公司")
 
     # 阶段1: 显示和触控
     _init_display()
@@ -208,6 +208,20 @@ def main():
     led = _init_led()
     cam = _init_camera()
     sys_mgr = _init_system(stage, led)
+
+    # 加载用户设置
+    try:
+        import settings
+        prefs = settings.load()
+        stage.set_speed(prefs["speed"])
+        led.set_brightness(prefs["led_brightness"])
+        if prefs["led_brightness"] > 0:
+            led.on()
+        if cam._initialized:
+            cam.set_resolution(prefs["cam_width"], prefs["cam_height"])
+        log(f"用户设置已加载 (速度={prefs['speed']}, LED={prefs['led_brightness']}%)")
+    except Exception as e:
+        log(f"警告: 设置加载失败 ({e})")
 
     # 语音控制（可选）
     voice = None
@@ -222,10 +236,19 @@ def main():
     # 阶段3: WiFi 服务
     ip = _init_wifi()
     if ip:
-        _start_wifi_server(sys_mgr, stage, led, cam)
+        _start_wifi_server(sys_mgr, stage, led, cam, ae)
+
+    # 自动曝光（可选）
+    ae = None
+    try:
+        from auto_exposure import AutoExposure
+        ae = AutoExposure(cam, led)
+        log("自动曝光就绪")
+    except Exception as e:
+        log(f"警告: 自动曝光初始化失败 ({e})")
 
     # 阶段4: UI
-    ui = _init_ui(stage, led, sys_mgr, cam, voice)
+    ui = _init_ui(stage, led, sys_mgr, cam, voice, ae)
 
     # ====== 主事件循环 ======
     log("系统就绪")
@@ -235,6 +258,9 @@ def main():
             import lvgl as lv
             while True:
                 lv.timer_handler_run_in_period(5)
+                # 自动曝光处理
+                if ae is not None and ae.is_active():
+                    ae.process()
                 time.sleep_ms(5)
         except KeyboardInterrupt:
             log("用户中断")
@@ -250,6 +276,16 @@ def main():
 
     # ====== 清理 ======
     log("正在关机...")
+    # 保存用户设置
+    try:
+        import settings
+        settings.update("speed", stage._speed if hasattr(stage, '_speed') else "中")
+        settings.update("led_brightness", led.get_state()["brightness"])
+        settings.update("cam_width", cam._width)
+        settings.update("cam_height", cam._height)
+        log("用户设置已保存")
+    except Exception:
+        pass
     try:
         cam.deinit()
     except Exception:

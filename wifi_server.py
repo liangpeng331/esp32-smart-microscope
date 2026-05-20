@@ -120,18 +120,20 @@ class WifiServer:
     BUFFER_SIZE = 1024
     MAX_PRESETS = 6
 
-    def __init__(self, system_manager, stage, led, cam=None):
+    def __init__(self, system_manager, stage, led, cam=None, ae=None):
         """
         Args:
             system_manager: SystemManager 实例
             stage: StageController 实例
             led: LedController 实例
             cam: CameraController 实例 (可选)
+            ae: AutoExposure 实例 (可选)
         """
         self._sys = system_manager
         self._stage = stage
         self._led = led
         self._cam = cam
+        self._ae = ae
         self._sock = None
         self._running = False
 
@@ -147,6 +149,8 @@ class WifiServer:
             ("GET", "/api/camera"): self._handle_get_camera,
             ("POST", "/api/camera/capture"): self._handle_camera_capture,
             ("POST", "/api/camera/preview"): self._handle_camera_preview,
+            ("GET", "/api/autoexposure"): self._handle_get_ae,
+            ("POST", "/api/autoexposure"): self._handle_set_ae,
             ("GET", "/api/files"): self._handle_files_list,
         }
         # 流式端点（不返回响应体，直接写 socket）
@@ -413,6 +417,27 @@ class WifiServer:
                 conn.close()
             except Exception:
                 pass
+
+    # ====== 自动曝光 ======
+
+    def _handle_get_ae(self, path, body):
+        if self._ae is None:
+            return _build_response(404, {"error": "自动曝光未初始化"})
+        return _build_response(200, self._ae.get_state())
+
+    def _handle_set_ae(self, path, body):
+        if self._ae is None:
+            return _build_response(404, {"error": "自动曝光未初始化"})
+        try:
+            data = json.loads(body) if body else {}
+        except ValueError:
+            return _build_response(400, {"error": "JSON 格式错误"})
+        enable = data.get("enable", False)
+        if enable:
+            self._ae.start()
+        else:
+            self._ae.stop()
+        return _build_response(200, self._ae.get_state())
 
     # ====== 文件管理 ======
 
