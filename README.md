@@ -416,7 +416,7 @@ make -j$(sysctl -n hw.ncpu 2>/dev/null || nproc)
 
 ```bash
 cd ~
-git clone https://github.com/liangpeng331/esp32-smart-microscope.git
+git clone https://github.com/bluebaby/esp32-smart-microscope.git
 cd esp32-smart-microscope
 
 # 将板级定义链接到 MicroPython 源码树
@@ -869,7 +869,7 @@ A: 烧录和串口工具在 Windows 下也支持。但编译固件建议使用 W
 
 ## 相关链接
 
-* 项目仓库：https://github.com/liangpeng331/esp32-smart-microscope
+* 项目仓库：https://github.com/bluebaby/esp32-smart-microscope
 * Waveshare 产品页：https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-4B
 * MicroPython 官方：https://micropython.org/
 * ESP-IDF 文档：https://docs.espressif.com/projects/esp-idf/
