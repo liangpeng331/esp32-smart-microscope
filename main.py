@@ -161,11 +161,11 @@ def _init_wifi():
         return None
 
 
-def _start_wifi_server(system_mgr, stage, led, cam=None, ae=None):
+def _start_wifi_server(system_mgr, stage, led, cam=None, ae=None, ca=None):
     """在后台线程启动 WiFi HTTP 服务器。"""
     from wifi_server import WifiServer
 
-    server = WifiServer(system_mgr, stage, led, cam, ae)
+    server = WifiServer(system_mgr, stage, led, cam, ae, ca)
     try:
         _thread.start_new_thread(server._serve, ())
         log(f"HTTP API 服务器已启动 (端口 {config.HTTP_PORT})")
@@ -233,10 +233,19 @@ def main():
     except Exception as e:
         log(f"警告: 语音控制初始化失败 ({e})")
 
+    # 细胞分析（可选）
+    ca = None
+    try:
+        from cell_analyzer import CellAnalyzer
+        ca = CellAnalyzer(cam)
+        log("细胞分析模块初始化完成")
+    except Exception as e:
+        log(f"警告: 细胞分析初始化失败 ({e})")
+
     # 阶段3: WiFi 服务
     ip = _init_wifi()
     if ip:
-        _start_wifi_server(sys_mgr, stage, led, cam, ae)
+        _start_wifi_server(sys_mgr, stage, led, cam, ae, ca)
 
     # 自动曝光（可选）
     ae = None
