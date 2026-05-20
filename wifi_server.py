@@ -120,7 +120,7 @@ class WifiServer:
     BUFFER_SIZE = 1024
     MAX_PRESETS = 6
 
-    def __init__(self, system_manager, stage, led, cam=None, ae=None):
+    def __init__(self, system_manager, stage, led, cam=None, ae=None, cell_analyzer=None):
         """
         Args:
             system_manager: SystemManager 实例
@@ -128,12 +128,14 @@ class WifiServer:
             led: LedController 实例
             cam: CameraController 实例 (可选)
             ae: AutoExposure 实例 (可选)
+            cell_analyzer: CellAnalyzer 实例 (可选)
         """
         self._sys = system_manager
         self._stage = stage
         self._led = led
         self._cam = cam
         self._ae = ae
+        self._ca = cell_analyzer
         self._sock = None
         self._running = False
 
@@ -152,6 +154,12 @@ class WifiServer:
             ("GET", "/api/autoexposure"): self._handle_get_ae,
             ("POST", "/api/autoexposure"): self._handle_set_ae,
             ("GET", "/api/files"): self._handle_files_list,
+            ("GET", "/api/analyze"): self._handle_get_analysis,
+            ("POST", "/api/analyze/capture"): self._handle_analyze_capture,
+            ("POST", "/api/analyze/simple"): self._handle_analyze_simple,
+            ("GET", "/api/security"): self._handle_get_security,
+            ("POST", "/api/security/wifi"): self._handle_set_wifi,
+            ("POST", "/api/security/token"): self._handle_set_token,
         }
         # 流式端点（不返回响应体，直接写 socket）
         self._stream_routes = {
@@ -515,3 +523,91 @@ class WifiServer:
             return _build_response(200, {"deleted": filename})
         except OSError:
             return _build_response(404, {"error": f"文件不存在: {filename}"})
+
+    # ====== 细胞分析 ======
+
+    def _handle_get_analysis(self, path, body):
+        """获取最近一次细胞分析结果。"""
+        if self._ca is None:
+            return _build_response(404, {"error": "细胞分析模块未初始化"})
+        result = self._ca.get_last_result()
+        if result is None:
+            return _build_response(404, {"error": "暂无分析结果，请先执行 POST /api/analyze/capture"})
+        return _build_response(200, result)
+
+    def _handle_analyze_capture(self, path, body):
+        """拍照并将图像保存到 SD 卡（供桌面端下载分析）。"""
+        if self._ca is None:
+            return _build_response(404, {"error": "细胞分析模块未初始化"})
+        result = self._ca.capture_for_analysis()
+        if "error" in result:
+            return _build_response(500, result)
+        return _build_response(201, result)
+
+    def _handle_analyze_simple(self, path, body):
+        """在设备端执行内建简易计数。"""
+        if self._ca is None:
+            return _build_response(404, {"error": "细胞分析模块未初始化"})
+        if self._cam is None:
+            return _build_response(404, {"error": "摄像头未连接"})
+        jpeg = self._cam.capture()
+        if jpeg is None:
+            return _build_response(500, {"error": "拍照失败"})
+        result = self._ca.simple_count(jpeg)
+        if "error" in result:
+            return _build_response(500, result)
+        return _build_response(200, result)
+
+    # ====== 安全设置 ======
+
+    def _handle_get_security(self, path, body):
+        """获取当前安全配置（不含密码明文）。"""
+        try:
+            from security import load_security
+            cfg = load_security()
+        except Exception:
+            cfg = {"wifi_ssid": "", "token_required": False}
+        return _build_response(200, {
+            "wifi_ssid": cfg.get("wifi_ssid", ""),
+            "token_required": cfg.get("token_required", False),
+        })
+
+    def _handle_set_wifi(self, path, body):
+        """修改 WiFi SSID 或密码（需重启生效）。"""
+        try:
+            data = json.loads(body) if body else {}
+        except ValueError:
+            return _build_response(400, {"error": "JSON 格式错误"})
+        try:
+            from security import update_ssid, update_password
+            ssid = data.get("ssid")
+            password = data.get("password")
+            changed = []
+            if ssid is not None:
+                update_ssid(str(ssid))
+                changed.append("ssid")
+            if password is not None:
+                update_password(str(password))
+                changed.append("password")
+            if not changed:
+                return _build_response(400, {"error": "请提供 ssid 或 password"})
+            return _build_response(200, {"changed": changed, "restart_required": True})
+        except ValueError as e:
+            return _build_response(400, {"error": str(e)})
+
+    def _handle_set_token(self, path, body):
+        """修改 API 令牌。"""
+        try:
+            data = json.loads(body) if body else {}
+        except ValueError:
+            return _build_response(400, {"error": "JSON 格式错误"})
+        try:
+            from security import update_api_token
+            token = data.get("token", "")
+            update_api_token(str(token))
+            return _build_response(200, {
+                "token_required": bool(token),
+                "restart_required": not bool(token),
+            })
+        except ValueError as e:
+            return _build_response(400, {"error": str(e)})

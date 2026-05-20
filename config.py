@@ -68,9 +68,27 @@ LED_PRESETS = {
 
 # ====== WiFi 参数 ======
 
+# 从 /sd/security.json 加载，如果不存在则使用以下默认值
 WIFI_SSID = "Microscope"
 WIFI_PASSWORD = "12345678"
+WIFI_SECURITY_FILE = "/sd/security.json"
 HTTP_PORT = 80
+
+def _load_wifi_settings():
+    """从安全配置文件加载 WiFi 设置，失败则用默认值。"""
+    try:
+        import json
+        with open(WIFI_SECURITY_FILE, "r") as f:
+            cfg = json.load(f)
+        return cfg.get("wifi_ssid", WIFI_SSID), cfg.get("wifi_password", WIFI_PASSWORD)
+    except Exception:
+        return WIFI_SSID, WIFI_PASSWORD
+
+# 模块级属性 — MicroPython 启动时自动加载
+try:
+    WIFI_SSID, WIFI_PASSWORD = _load_wifi_settings()
+except Exception:
+    pass
 
 # ====== 系统参数 ======
 
