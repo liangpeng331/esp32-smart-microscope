@@ -82,7 +82,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '广东童园科技有限公司',
+                '3-Axis Digital Microscope',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
               ),
               const SizedBox(height: 40),

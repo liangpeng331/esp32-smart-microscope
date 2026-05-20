@@ -108,7 +108,7 @@ class TouchUI:
         title.align(lv.ALIGN_TOP_MID, 0, 12)
 
         subtitle = lv.label(self._scr)
-        subtitle.set_text("广东童园科技有限公司")
+        subtitle.set_text("3-Axis Digital Microscope")
         subtitle.set_style_text_color(_lv_color(_HEX_SUBTLE), 0)
         subtitle.set_style_text_font(_lv_font(14), 0)
         subtitle.align(lv.ALIGN_TOP_MID, 0, 40)
@@ -516,8 +516,6 @@ class TouchUI:
         self._show_alert("关于",
             "ESP32-P4 智能显微镜\n"
             "版本 1.0.0\n\n"
-            "广东童园科技有限公司\n"
-            "www.tongyuankj.com\n\n"
             "3 轴电动云台 | LED 调光\n"
             "800×600 显微摄影\n"
             "720×720 IPS 触摸屏\n"

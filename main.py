@@ -197,7 +197,7 @@ def _init_ui(stage, led, sys_mgr, cam=None, voice=None, ae=None):
 
 def main():
     log("ESP32-P4 智能显微镜 启动中...")
-    log("版本 1.2.0 — 广东童园科技有限公司")
+    log("版本 1.2.0")
 
     # 阶段1: 显示和触控
     _init_display()

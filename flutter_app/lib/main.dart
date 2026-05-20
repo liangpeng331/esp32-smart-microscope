@@ -94,7 +94,7 @@ class _AppShellState extends State<AppShell> {
                   SizedBox(height: 8),
                   Text('智能显微镜 v1.2.0',
                        style: TextStyle(color: Colors.white, fontSize: 18)),
-                  Text('广东童园科技有限公司',
+                  Text('3-Axis Digital Microscope',
                        style: TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
