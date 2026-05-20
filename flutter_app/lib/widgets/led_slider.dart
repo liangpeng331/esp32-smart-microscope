@@ -33,7 +33,7 @@ class LedSlider extends StatelessWidget {
             Switch(
               value: on,
               onChanged: (_) => onToggle?.call(),
-              activeColor: Colors.amber,
+              activeTrackColor: Colors.amber,
             ),
           ],
         ),

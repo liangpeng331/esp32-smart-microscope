@@ -19,7 +19,6 @@ class ControlScreen extends StatefulWidget {
 class _ControlScreenState extends State<ControlScreen> {
   SystemStatus? _status;
   LedState? _led;
-  CameraState? _camera;
   Timer? _pollTimer;
   bool _previewing = false;
 

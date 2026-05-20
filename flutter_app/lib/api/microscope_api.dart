@@ -28,14 +28,6 @@ class MicroscopeApi {
     throw ApiException(r.statusCode, r.body);
   }
 
-  Future<http.Response> _postRaw(String path, [Map<String, dynamic>? body]) async {
-    return http
-        .post(_uri(path),
-            headers: {'Content-Type': 'application/json'},
-            body: body != null ? json.encode(body) : null)
-        .timeout(timeout);
-  }
-
   // ---- 状态 ----
   Future<Map<String, dynamic>> getStatus() => _get('/api/status');
 

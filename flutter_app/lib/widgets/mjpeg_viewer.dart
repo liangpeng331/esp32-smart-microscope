@@ -20,7 +20,7 @@ class MjpegViewer extends StatefulWidget {
 
 class _MjpegViewerState extends State<MjpegViewer> {
   http.Client? _client;
-  StreamSubscription<Uint8List>? _sub;
+  StreamSubscription<List<int>>? _sub;
   Uint8List? _currentFrame;
   String? _error;
   int _frameCount = 0;
