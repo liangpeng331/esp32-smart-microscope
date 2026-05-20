@@ -206,7 +206,11 @@
 
       <div style="display:flex;gap:8px;">
         <button class="btn btn-primary" onclick="apiCameraCapture()">拍照</button>
-        <button class="btn btn-default" onclick="apiCameraPreview()">取景</button>
+        <button class="btn btn-default" id="streamBtn" onclick="toggleStream()">实时取景</button>
+      </div>
+      <div id="streamContainer" style="margin-top:8px;display:none;">
+        <img id="mjpegStream" src="" style="width:100%;border-radius:6px;border:1px solid #30363d;"
+             alt="实时视频流">
       </div>
       <div id="cameraStatus" style="font-size:12px;color:#8b949e;margin-top:8px;"></div>
     </div>
@@ -367,8 +371,21 @@ async function apiCameraCapture() {
   const data = await apiCall('POST', '/api/camera/capture', {});
   if (data && data.file) log('ok', `照片已保存: ${data.file}`);
 }
-async function apiCameraPreview() {
-  await apiCall('POST', '/api/camera/preview', { enable: true });
+function toggleStream() {
+  const container = document.getElementById('streamContainer');
+  const img = document.getElementById('mjpegStream');
+  const btn = document.getElementById('streamBtn');
+  if (container.style.display === 'none') {
+    img.src = `${apiBase}/api/camera/stream?t=${Date.now()}`;
+    container.style.display = '';
+    btn.textContent = '停止取景';
+    btn.className = 'btn btn-danger';
+  } else {
+    img.src = '';
+    container.style.display = 'none';
+    btn.textContent = '实时取景';
+    btn.className = 'btn btn-default';
+  }
 }
 
 function setSpeed(speed) {
