@@ -83,11 +83,41 @@ def _init_led():
         freq=config.PWM_FREQ,
         max_duty=config.PWM_MAX_DUTY,
     )
-    # 启动时点亮到中档亮度
     led.set_brightness(50)
     led.on()
     log("LED 照明初始化完成")
     return led
+
+
+def _init_camera():
+    """初始化摄像头。"""
+    from camera_controller import CameraController
+
+    cam = CameraController(
+        width=config.CAM_DEFAULT_WIDTH,
+        height=config.CAM_DEFAULT_HEIGHT,
+        fmt=config.CAM_DEFAULT_FORMAT,
+        fps=config.CAM_FPS,
+    )
+    cam.init(
+        xclk_pin=config.CAM_PIN_XCLK,
+        siod_pin=config.CAM_PIN_SIOD,
+        sioc_pin=config.CAM_PIN_SIOC,
+        d7_pin=config.CAM_PIN_D7,
+        d6_pin=config.CAM_PIN_D6,
+        d5_pin=config.CAM_PIN_D5,
+        d4_pin=config.CAM_PIN_D4,
+        d3_pin=config.CAM_PIN_D3,
+        d2_pin=config.CAM_PIN_D2,
+        d1_pin=config.CAM_PIN_D1,
+        d0_pin=config.CAM_PIN_D0,
+        vsync_pin=config.CAM_PIN_VSYNC,
+        href_pin=config.CAM_PIN_HREF,
+        pclk_pin=config.CAM_PIN_PCLK,
+        pwdn_pin=config.CAM_PIN_PWDN,
+    )
+    log("摄像头初始化完成")
+    return cam
 
 
 def _init_system(stage, led):
@@ -131,11 +161,11 @@ def _init_wifi():
         return None
 
 
-def _start_wifi_server(system_mgr, stage, led):
+def _start_wifi_server(system_mgr, stage, led, cam=None):
     """在后台线程启动 WiFi HTTP 服务器。"""
     from wifi_server import WifiServer
 
-    server = WifiServer(system_mgr, stage, led)
+    server = WifiServer(system_mgr, stage, led, cam)
     try:
         _thread.start_new_thread(server._serve, ())
         log(f"HTTP API 服务器已启动 (端口 {config.HTTP_PORT})")
@@ -146,13 +176,13 @@ def _start_wifi_server(system_mgr, stage, led):
 
 # ====== 阶段4: UI 启动 ======
 
-def _init_ui(stage, led, sys_mgr):
+def _init_ui(stage, led, sys_mgr, cam=None, voice=None):
     """创建并返回 TouchUI 实例。"""
     try:
         import lvgl as lv
         from touch_ui import TouchUI
 
-        ui = TouchUI(stage, led, sys_mgr)
+        ui = TouchUI(stage, led, sys_mgr, cam, voice)
         log("触摸界面就绪")
         return ui
     except ImportError:
@@ -167,7 +197,7 @@ def _init_ui(stage, led, sys_mgr):
 
 def main():
     log("ESP32-P4 智能显微镜 启动中...")
-    log(f"版本 1.0.0 — 广东童园科技有限公司")
+    log("版本 1.0.0 — 广东童园科技有限公司")
 
     # 阶段1: 显示和触控
     _init_display()
@@ -176,32 +206,41 @@ def main():
     # 阶段2: 系统模块
     stage = _init_stage()
     led = _init_led()
+    cam = _init_camera()
     sys_mgr = _init_system(stage, led)
+
+    # 语音控制（可选）
+    voice = None
+    try:
+        from voice_controller import VoiceController
+        voice = VoiceController(sys_mgr, stage, led, cam)
+        voice.init()
+        log("语音控制初始化完成")
+    except Exception as e:
+        log(f"警告: 语音控制初始化失败 ({e})")
 
     # 阶段3: WiFi 服务
     ip = _init_wifi()
     if ip:
-        _start_wifi_server(sys_mgr, stage, led)
+        _start_wifi_server(sys_mgr, stage, led, cam)
 
     # 阶段4: UI
-    ui = _init_ui(stage, led, sys_mgr)
+    ui = _init_ui(stage, led, sys_mgr, cam, voice)
 
     # ====== 主事件循环 ======
     log("系统就绪")
 
     if ui is not None:
-        # LVGL 事件循环模式
         try:
             import lvgl as lv
             while True:
-                lv.timer_handler_run_in_period(5)  # ±5ms
+                lv.timer_handler_run_in_period(5)
                 time.sleep_ms(5)
         except KeyboardInterrupt:
             log("用户中断")
         except Exception as e:
             log(f"事件循环异常: {e}")
     else:
-        # 无屏模式：仅保持 WiFi 服务运行
         log("运行在无屏模式，按 Ctrl+C 退出")
         try:
             while True:
@@ -211,6 +250,10 @@ def main():
 
     # ====== 清理 ======
     log("正在关机...")
+    try:
+        cam.deinit()
+    except Exception:
+        pass
     try:
         stage.release_all()
     except Exception:
